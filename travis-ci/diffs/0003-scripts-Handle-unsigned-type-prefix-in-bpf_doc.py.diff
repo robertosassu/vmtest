@@ -1,0 +1,63 @@
+From 69f17744ae44c1faa8cc6337b4225de110a33998 Mon Sep 17 00:00:00 2001
+From: Roberto Sassu <roberto.sassu@huawei.com>
+Date: Tue, 28 Jun 2022 09:32:05 +0200
+Subject: [PATCH v6 3/5] scripts: Handle unsigned type prefix in bpf_doc.py
+
+While unsigned long is an accepted parameter type, the regular expression
+validating helper prototypes does not correctly take into account types
+composed by multiple words.
+
+The regular expression:
+
+((const )?(struct )?(\w+|\.\.\.)( \**\w+)?)
+
+accepts only const and struct as prefix before the type. The following part
+of the regular expression expects a word with [a-zA-Z0-9_] characters
+(without space), so it would get just unsigned. Parsing words with \w+ in
+greedy mode makes the regular expression work even if the type is composed
+by two words. It wouldn't have been the case in possessive mode \w++ (don't
+give back characters to match the regular expression).
+
+Simply adding unsigned as possible prefix is not correct, as the struct
+unsigned combination is not legal. Make instead struct and unsigned as
+alternatives, so that the following new combinations are legal:
+
+unsigned type
+struct type
+const unsigned type
+
+and not:
+
+struct unsigned type
+
+The regular expression is a preliminary check. The type, other than being
+legal, must be also present in the known_types array.
+
+Don't mention the change in the regular expression description, as it is
+assumed that type implies also multiple words types.
+
+At this point, don't switch from greedy to possessive mode (\w+ -> \w++) to
+avoid partial parsing of the type of helper parameters, as this
+functionality has only been added recently in Python 3.11.
+
+Signed-off-by: Roberto Sassu <roberto.sassu@huawei.com>
+---
+ scripts/bpf_doc.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/scripts/bpf_doc.py b/scripts/bpf_doc.py
+index a0ec321469bd..25e79d811487 100755
+--- a/scripts/bpf_doc.py
++++ b/scripts/bpf_doc.py
+@@ -124,7 +124,7 @@ class HeaderParser(object):
+         #   - Same as above, with "const" and/or "struct" in front of type
+         #   - "..." (undefined number of arguments, for bpf_trace_printk())
+         # There is at least one term ("void"), and at most five arguments.
+-        p = re.compile(' \* ?((.+) \**\w+\((((const )?(struct )?(\w+|\.\.\.)( \**\w+)?)(, )?){1,5}\))$')
++        p = re.compile(' \* ?((.+) \**\w+\((((const )?((struct )|(unsigned )?)(\w+|\.\.\.)( \**\w+)?)(, )?){1,5}\))$')
+         capture = p.match(self.line)
+         if not capture:
+             raise NoHelperFound
+-- 
+2.25.1
+
