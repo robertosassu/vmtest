@@ -1,0 +1,27 @@
+From 42783573cc9561c218bb9296c25917634a39df6d Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@kernel.org>
+Date: Tue, 28 Jun 2022 16:19:46 +0000
+Subject: [RFC][PATCH v8 02/12] bpf: Allow kfuncs to be used in LSM programs
+
+In preparation for the addition of bpf_getxattr kfunc.
+
+Signed-off-by: KP Singh <kpsingh@kernel.org>
+---
+ kernel/bpf/btf.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/kernel/bpf/btf.c b/kernel/bpf/btf.c
+index 2a28ead92841..e6fc01de7e50 100644
+--- a/kernel/bpf/btf.c
++++ b/kernel/bpf/btf.c
+@@ -7241,6 +7241,7 @@ static int bpf_prog_type_to_kfunc_hook(enum bpf_prog_type prog_type)
+ 	case BPF_PROG_TYPE_STRUCT_OPS:
+ 		return BTF_KFUNC_HOOK_STRUCT_OPS;
+ 	case BPF_PROG_TYPE_TRACING:
++	case BPF_PROG_TYPE_LSM:
+ 		return BTF_KFUNC_HOOK_TRACING;
+ 	case BPF_PROG_TYPE_SYSCALL:
+ 		return BTF_KFUNC_HOOK_SYSCALL;
+-- 
+2.25.1
+

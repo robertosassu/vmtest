@@ -1,0 +1,171 @@
+From 46e2edcf82ca38c9c6d29309ddbd51dcf3241d06 Mon Sep 17 00:00:00 2001
+From: Roberto Sassu <roberto.sassu@huawei.com>
+Date: Tue, 21 Jun 2022 10:51:48 +0200
+Subject: [RFC][PATCH v8 11/12] selftests/bpf: Add additional test for
+ bpf_lookup_user_key()
+
+Add an additional test to ensure that bpf_lookup_user_key() creates a
+referenced special keyring when the KEY_LOOKUP_CREATE flag is passed to
+this function.
+
+Also ensure that the kfunc rejects invalid flags.
+
+Signed-off-by: Roberto Sassu <roberto.sassu@huawei.com>
+---
+ .../bpf/prog_tests/lookup_user_key.c          | 98 +++++++++++++++++++
+ .../bpf/progs/test_lookup_user_key.c          | 38 +++++++
+ 2 files changed, 136 insertions(+)
+ create mode 100644 tools/testing/selftests/bpf/prog_tests/lookup_user_key.c
+ create mode 100644 tools/testing/selftests/bpf/progs/test_lookup_user_key.c
+
+diff --git a/tools/testing/selftests/bpf/prog_tests/lookup_user_key.c b/tools/testing/selftests/bpf/prog_tests/lookup_user_key.c
+new file mode 100644
+index 000000000000..e53686932785
+--- /dev/null
++++ b/tools/testing/selftests/bpf/prog_tests/lookup_user_key.c
+@@ -0,0 +1,98 @@
++// SPDX-License-Identifier: GPL-2.0
++
++/*
++ * Copyright (C) 2022 Huawei Technologies Duesseldorf GmbH
++ *
++ * Author: Roberto Sassu <roberto.sassu@huawei.com>
++ */
++
++#include <linux/keyctl.h>
++#include <test_progs.h>
++
++#include "test_lookup_user_key.skel.h"
++
++#define KEY_LOOKUP_CREATE	0x01
++#define KEY_LOOKUP_PARTIAL	0x02
++
++static bool kfunc_not_supported;
++
++static int libbpf_print_cb(enum libbpf_print_level level, const char *fmt,
++			   va_list args)
++{
++	char *func;
++
++	if (strcmp(fmt, "libbpf: extern (func ksym) '%s': not found in kernel or module BTFs\n"))
++		return 0;
++
++	func = va_arg(args, char *);
++
++	if (strcmp(func, "bpf_lookup_user_key") && strcmp(func, "bpf_key_put"))
++		return 0;
++
++	kfunc_not_supported = true;
++	return 0;
++}
++
++void test_lookup_user_key(void)
++{
++	libbpf_print_fn_t old_print_cb;
++	struct test_lookup_user_key *skel = NULL;
++	u32 next_id;
++	int ret;
++
++	skel = test_lookup_user_key__open();
++	if (!ASSERT_OK_PTR(skel, "test_lookup_user_key__open"))
++		return;
++
++	old_print_cb = libbpf_set_print(libbpf_print_cb);
++	ret = test_lookup_user_key__load(skel);
++	libbpf_set_print(old_print_cb);
++
++	if (ret < 0 && kfunc_not_supported) {
++		printf("%s:SKIP:bpf_lookup_user_key() kfunc not supported\n",
++		       __func__);
++		test__skip();
++		goto close_prog;
++	}
++
++	if (!ASSERT_OK(ret, "test_lookup_user_key__load"))
++		goto close_prog;
++
++	ret = test_lookup_user_key__attach(skel);
++	if (!ASSERT_OK(ret, "test_lookup_user_key__attach"))
++		goto close_prog;
++
++	skel->bss->monitored_pid = getpid();
++	skel->bss->key_serial = KEY_SPEC_THREAD_KEYRING;
++
++	/* The thread-specific keyring does not exist, this test fails. */
++	skel->bss->flags = 0;
++
++	ret = bpf_prog_get_next_id(0, &next_id);
++	if (!ASSERT_LT(ret, 0, "bpf_prog_get_next_id"))
++		goto close_prog;
++
++	/* Force creation of the thread-specific keyring, this test succeeds. */
++	skel->bss->flags = KEY_LOOKUP_CREATE;
++
++	ret = bpf_prog_get_next_id(0, &next_id);
++	if (!ASSERT_OK(ret, "bpf_prog_get_next_id"))
++		goto close_prog;
++
++	/* Pass both lookup flags for parameter validation. */
++	skel->bss->flags = KEY_LOOKUP_CREATE | KEY_LOOKUP_PARTIAL;
++
++	ret = bpf_prog_get_next_id(0, &next_id);
++	if (!ASSERT_OK(ret, "bpf_prog_get_next_id"))
++		goto close_prog;
++
++	/* Pass invalid flags. */
++	skel->bss->flags = UINT64_MAX;
++
++	ret = bpf_prog_get_next_id(0, &next_id);
++	ASSERT_LT(ret, 0, "bpf_prog_get_next_id");
++
++close_prog:
++	skel->bss->monitored_pid = 0;
++	test_lookup_user_key__destroy(skel);
++}
+diff --git a/tools/testing/selftests/bpf/progs/test_lookup_user_key.c b/tools/testing/selftests/bpf/progs/test_lookup_user_key.c
+new file mode 100644
+index 000000000000..29d963055834
+--- /dev/null
++++ b/tools/testing/selftests/bpf/progs/test_lookup_user_key.c
+@@ -0,0 +1,38 @@
++// SPDX-License-Identifier: GPL-2.0
++
++/*
++ * Copyright (C) 2022 Huawei Technologies Duesseldorf GmbH
++ *
++ * Author: Roberto Sassu <roberto.sassu@huawei.com>
++ */
++
++#include "vmlinux.h"
++#include <errno.h>
++#include <bpf/bpf_helpers.h>
++#include <bpf/bpf_tracing.h>
++
++char _license[] SEC("license") = "GPL";
++
++__u32 monitored_pid;
++__u32 key_serial;
++__u64 flags;
++
++extern struct key *bpf_lookup_user_key(__u32 serial, __u64 flags) __ksym;
++extern void bpf_key_put(struct key *key) __ksym;
++
++SEC("lsm.s/bpf")
++int BPF_PROG(bpf, int cmd, union bpf_attr *attr, unsigned int size)
++{
++	struct key *key;
++	__u32 pid;
++
++	pid = bpf_get_current_pid_tgid() >> 32;
++	if (pid != monitored_pid)
++		return 0;
++
++	key = bpf_lookup_user_key(key_serial, flags);
++	if (key)
++		bpf_key_put(key);
++
++	return (key) ? 0 : -ENOENT;
++}
+-- 
+2.25.1
+
