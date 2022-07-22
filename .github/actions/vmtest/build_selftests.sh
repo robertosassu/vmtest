@@ -39,6 +39,7 @@ make \
 	LLVM_STRIP=llvm-strip-${LLVM_VER} \
 	VMLINUX_BTF="${VMLINUX_BTF}" \
 	VMLINUX_H="${VMLINUX_H}" \
+	BPFTOOL_STATIC=1 \
 	-C "${REPO_ROOT}/${REPO_PATH}/tools/testing/selftests/bpf" \
 	-j $((4*$(nproc))) > /dev/null
 cd -
