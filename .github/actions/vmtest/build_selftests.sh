@@ -14,7 +14,7 @@ if [ "$TOOLCHAIN_NAME" == "llvm" ]; then
 export LLVM="-$TOOLCHAIN_VERSION"
 LLVM_VER=$TOOLCHAIN_VERSION
 else
-LLVM_VER=15
+LLVM_VER=16
 fi
 
 travis_fold start prepare_selftests "Building selftests with $TOOLCHAIN"
