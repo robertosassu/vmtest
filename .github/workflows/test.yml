@@ -34,12 +34,12 @@ jobs:
       REPO_PATH: ""
     steps:
       - uses: actions/checkout@v2
-      - if: ${{ github.repository == 'kernel-patches/vmtest' }}
+      - if: ${{ github.repository == 'robertosassu/vmtest' }}
         name: Download bpf-next tree
         uses: libbpf/ci/get-linux-source@master
         with:
           dest: '.kernel'
-      - if: ${{ github.repository == 'kernel-patches/vmtest' }}
+      - if: ${{ github.repository == 'robertosassu/vmtest' }}
         name: Move linux source in place
         shell: bash
         run: |
