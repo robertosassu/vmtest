@@ -53,7 +53,7 @@ jobs:
       - name: Setup build environment
         uses: libbpf/ci/setup-build-env@master
       - name: Build kernel image
-        uses: libbpf/ci/build-linux@master
+        uses: robertosassu/libbpf-ci/build-linux@compile-built-in
         with:
           arch: ${{ matrix.arch }}
           toolchain: ${{ matrix.toolchain }}
