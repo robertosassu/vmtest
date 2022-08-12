@@ -1,0 +1,49 @@
+From 2cc032b315abc970930194809294c0eb0cab8def Mon Sep 17 00:00:00 2001
+From: Roberto Sassu <roberto.sassu@huawei.com>
+Date: Fri, 12 Aug 2022 10:46:59 +0200
+Subject: [PATCH v11 0/9] *** SUBJECT HERE ***
+
+*** BLURB HERE ***
+
+KP Singh (1):
+  bpf: Allow kfuncs to be used in LSM programs
+
+Roberto Sassu (8):
+  btf: Handle dynamic pointer parameter in kfuncs
+  bpf: Export bpf_dynptr_get_size()
+  KEYS: Move KEY_LOOKUP_ to include/linux/key.h
+  bpf: Add bpf_lookup_*_key() and bpf_key_put() kfuncs
+  bpf: Add bpf_verify_pkcs7_signature() kfunc
+  selftests/bpf: Add verifier tests for bpf_lookup_*_key() and
+    bpf_key_put()
+  selftests/bpf: Add additional tests for bpf_lookup_*_key()
+  selftests/bpf: Add test for bpf_verify_pkcs7_signature() kfunc
+
+ include/linux/bpf.h                           |   7 +
+ include/linux/bpf_verifier.h                  |   3 +
+ include/linux/key.h                           |  11 +
+ include/linux/verification.h                  |   8 +
+ kernel/bpf/btf.c                              |  23 +
+ kernel/bpf/helpers.c                          |   2 +-
+ kernel/bpf/verifier.c                         |   4 +-
+ kernel/trace/bpf_trace.c                      | 184 ++++++++
+ security/keys/internal.h                      |   2 -
+ tools/testing/selftests/bpf/Makefile          |  14 +-
+ tools/testing/selftests/bpf/config            |   1 +
+ .../selftests/bpf/prog_tests/lookup_key.c     | 112 +++++
+ .../bpf/prog_tests/verify_pkcs7_sig.c         | 399 ++++++++++++++++++
+ .../selftests/bpf/progs/test_lookup_key.c     |  46 ++
+ .../bpf/progs/test_verify_pkcs7_sig.c         | 100 +++++
+ tools/testing/selftests/bpf/test_verifier.c   |   3 +-
+ .../selftests/bpf/verifier/ref_tracking.c     | 139 ++++++
+ .../testing/selftests/bpf/verify_sig_setup.sh | 104 +++++
+ 18 files changed, 1153 insertions(+), 9 deletions(-)
+ create mode 100644 tools/testing/selftests/bpf/prog_tests/lookup_key.c
+ create mode 100644 tools/testing/selftests/bpf/prog_tests/verify_pkcs7_sig.c
+ create mode 100644 tools/testing/selftests/bpf/progs/test_lookup_key.c
+ create mode 100644 tools/testing/selftests/bpf/progs/test_verify_pkcs7_sig.c
+ create mode 100755 tools/testing/selftests/bpf/verify_sig_setup.sh
+
+-- 
+2.25.1
+

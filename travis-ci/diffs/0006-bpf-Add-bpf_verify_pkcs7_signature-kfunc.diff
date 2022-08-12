@@ -1,0 +1,95 @@
+From 9d1bb925b897ebc4947f2810f38866dbb0a40432 Mon Sep 17 00:00:00 2001
+From: Roberto Sassu <roberto.sassu@huawei.com>
+Date: Wed, 10 Aug 2022 17:06:16 +0200
+Subject: [PATCH v11 6/9] bpf: Add bpf_verify_pkcs7_signature() kfunc
+
+Add the bpf_verify_pkcs7_signature() kfunc, to give eBPF security modules
+the ability to check the validity of a signature against supplied data, by
+using user-provided or system-provided keys as trust anchor.
+
+The new kfunc makes it possible to enforce mandatory policies, as eBPF
+programs might be allowed to make security decisions only based on data
+sources the system administrator approves.
+
+The caller should provide the data to be verified and the signature as eBPF
+dynamic pointers (to minimize the number of parameters) and a bpf_key
+structure containing a reference to the keyring with keys trusted for
+signature verification, obtained from bpf_lookup_user_key() or
+bpf_lookup_system_key().
+
+For bpf_key structures obtained from the former lookup function,
+bpf_verify_pkcs7_signature() completes the permission check deferred by
+that function by calling key_validate(). key_task_permission() is already
+called by the PKCS#7 code.
+
+Signed-off-by: Roberto Sassu <roberto.sassu@huawei.com>
+Acked-by: KP Singh <kpsingh@kernel.org>
+---
+ kernel/trace/bpf_trace.c | 45 ++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 45 insertions(+)
+
+diff --git a/kernel/trace/bpf_trace.c b/kernel/trace/bpf_trace.c
+index 93457a9f6eba..11146aee04f2 100644
+--- a/kernel/trace/bpf_trace.c
++++ b/kernel/trace/bpf_trace.c
+@@ -1298,12 +1298,57 @@ void bpf_key_put(struct bpf_key *bkey)
+ 	kfree(bkey);
+ }
+ 
++#ifdef CONFIG_SYSTEM_DATA_VERIFICATION
++/**
++ * bpf_verify_pkcs7_signature - verify a PKCS#7 signature
++ * @data_ptr: data to verify
++ * @sig_ptr: signature of the data
++ * @trusted_keyring: keyring with keys trusted for signature verification
++ *
++ * Verify the PKCS#7 signature *sig_ptr* against the supplied *data_ptr*
++ * with keys in a keyring referenced by *trusted_keyring*.
++ *
++ * Return: 0 on success, a negative value on error.
++ */
++int bpf_verify_pkcs7_signature(struct bpf_dynptr_kern *data_ptr,
++			       struct bpf_dynptr_kern *sig_ptr,
++			       struct bpf_key *trusted_keyring)
++{
++	int ret;
++
++	if (trusted_keyring->has_ref) {
++		/*
++		 * Do the permission check deferred in bpf_lookup_user_key().
++		 * See bpf_lookup_user_key() for more details.
++		 *
++		 * A call to key_task_permission() here would be redundant, as
++		 * it is already done by keyring_search() called by
++		 * find_asymmetric_key().
++		 */
++		ret = key_validate(trusted_keyring->key);
++		if (ret < 0)
++			return ret;
++	}
++
++	return verify_pkcs7_signature(data_ptr->data,
++				      bpf_dynptr_get_size(data_ptr),
++				      sig_ptr->data,
++				      bpf_dynptr_get_size(sig_ptr),
++				      trusted_keyring->key,
++				      VERIFYING_UNSPECIFIED_SIGNATURE, NULL,
++				      NULL);
++}
++#endif /* CONFIG_SYSTEM_DATA_VERIFICATION */
++
+ __diag_pop();
+ 
+ BTF_SET8_START(key_sig_kfunc_set)
+ BTF_ID_FLAGS(func, bpf_lookup_user_key, KF_ACQUIRE | KF_RET_NULL | KF_SLEEPABLE)
+ BTF_ID_FLAGS(func, bpf_lookup_system_key, KF_ACQUIRE | KF_RET_NULL)
+ BTF_ID_FLAGS(func, bpf_key_put, KF_RELEASE)
++#ifdef CONFIG_SYSTEM_DATA_VERIFICATION
++BTF_ID_FLAGS(func, bpf_verify_pkcs7_signature, KF_SLEEPABLE)
++#endif
+ BTF_SET8_END(key_sig_kfunc_set)
+ 
+ static const struct btf_kfunc_id_set bpf_key_sig_kfunc_set = {
+-- 
+2.25.1
+
