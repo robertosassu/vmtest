@@ -1,0 +1,238 @@
+From a172c63b5d522680df67834a2e9c2576aecc3c08 Mon Sep 17 00:00:00 2001
+From: Roberto Sassu <roberto.sassu@huawei.com>
+Date: Wed, 24 Aug 2022 11:41:56 +0200
+Subject: [PATCH v4 08/13] bpftool: Add flags parameter to *_parse_fds()
+
+Add the flags parameter to prog_parse_fds(), map_parse_fds() to propagate
+them down to libbpf.
+
+Signed-off-by: Roberto Sassu <roberto.sassu@huawei.com>
+---
+ tools/bpf/bpftool/common.c | 48 ++++++++++++++++++++++++++------------
+ tools/bpf/bpftool/main.h   |  4 ++--
+ tools/bpf/bpftool/map.c    |  4 ++--
+ tools/bpf/bpftool/prog.c   |  4 ++--
+ 4 files changed, 39 insertions(+), 21 deletions(-)
+
+diff --git a/tools/bpf/bpftool/common.c b/tools/bpf/bpftool/common.c
+index 789080f4e669..77f7e337db2f 100644
+--- a/tools/bpf/bpftool/common.c
++++ b/tools/bpf/bpftool/common.c
+@@ -722,7 +722,8 @@ print_all_levels(__maybe_unused enum libbpf_print_level level,
+ 	return vfprintf(stderr, format, args);
+ }
+ 
+-static int prog_fd_by_nametag(void *nametag, int **fds, bool tag)
++static int prog_fd_by_nametag(void *nametag, int **fds, bool tag,
++			      const struct bpf_get_fd_opts *opts)
+ {
+ 	char prog_name[MAX_PROG_FULL_NAME];
+ 	unsigned int id = 0;
+@@ -743,7 +744,7 @@ static int prog_fd_by_nametag(void *nametag, int **fds, bool tag)
+ 			return nb_fds;
+ 		}
+ 
+-		fd = bpf_prog_get_fd_by_id(id);
++		fd = bpf_prog_get_fd_by_id_opts(id, opts);
+ 		if (fd < 0) {
+ 			p_err("can't get prog by id (%u): %s",
+ 			      id, strerror(errno));
+@@ -790,8 +791,16 @@ static int prog_fd_by_nametag(void *nametag, int **fds, bool tag)
+ 	return -1;
+ }
+ 
+-int prog_parse_fds(int *argc, char ***argv, int **fds)
++int prog_parse_fds(int *argc, char ***argv, int **fds, __u32 flags)
+ {
++	DECLARE_LIBBPF_OPTS(bpf_get_fd_opts, fd_opts,
++		.open_flags = flags,
++	);
++
++	DECLARE_LIBBPF_OPTS(bpf_obj_get_opts, obj_opts,
++		.file_flags = flags,
++	);
++
+ 	if (is_prefix(**argv, "id")) {
+ 		unsigned int id;
+ 		char *endptr;
+@@ -805,7 +814,7 @@ int prog_parse_fds(int *argc, char ***argv, int **fds)
+ 		}
+ 		NEXT_ARGP();
+ 
+-		(*fds)[0] = bpf_prog_get_fd_by_id(id);
++		(*fds)[0] = bpf_prog_get_fd_by_id_opts(id, &fd_opts);
+ 		if ((*fds)[0] < 0) {
+ 			p_err("get by id (%u): %s", id, strerror(errno));
+ 			return -1;
+@@ -824,7 +833,7 @@ int prog_parse_fds(int *argc, char ***argv, int **fds)
+ 		}
+ 		NEXT_ARGP();
+ 
+-		return prog_fd_by_nametag(tag, fds, true);
++		return prog_fd_by_nametag(tag, fds, true, &fd_opts);
+ 	} else if (is_prefix(**argv, "name")) {
+ 		char *name;
+ 
+@@ -837,7 +846,7 @@ int prog_parse_fds(int *argc, char ***argv, int **fds)
+ 		}
+ 		NEXT_ARGP();
+ 
+-		return prog_fd_by_nametag(name, fds, false);
++		return prog_fd_by_nametag(name, fds, false, &fd_opts);
+ 	} else if (is_prefix(**argv, "pinned")) {
+ 		char *path;
+ 
+@@ -846,7 +855,7 @@ int prog_parse_fds(int *argc, char ***argv, int **fds)
+ 		path = **argv;
+ 		NEXT_ARGP();
+ 
+-		(*fds)[0] = open_obj_pinned_any(path, BPF_OBJ_PROG, NULL);
++		(*fds)[0] = open_obj_pinned_any(path, BPF_OBJ_PROG, &obj_opts);
+ 		if ((*fds)[0] < 0)
+ 			return -1;
+ 		return 1;
+@@ -866,7 +875,7 @@ int prog_parse_fd(int *argc, char ***argv, __u32 flags)
+ 		p_err("mem alloc failed");
+ 		return -1;
+ 	}
+-	nb_fds = prog_parse_fds(argc, argv, &fds);
++	nb_fds = prog_parse_fds(argc, argv, &fds, flags);
+ 	if (nb_fds != 1) {
+ 		if (nb_fds > 1) {
+ 			p_err("several programs match this handle");
+@@ -883,7 +892,8 @@ int prog_parse_fd(int *argc, char ***argv, __u32 flags)
+ 	return fd;
+ }
+ 
+-static int map_fd_by_name(char *name, int **fds)
++static int map_fd_by_name(char *name, int **fds,
++			  const struct bpf_get_fd_opts *opts)
+ {
+ 	unsigned int id = 0;
+ 	int fd, nb_fds = 0;
+@@ -903,7 +913,7 @@ static int map_fd_by_name(char *name, int **fds)
+ 			return nb_fds;
+ 		}
+ 
+-		fd = bpf_map_get_fd_by_id(id);
++		fd = bpf_map_get_fd_by_id_opts(id, opts);
+ 		if (fd < 0) {
+ 			p_err("can't get map by id (%u): %s",
+ 			      id, strerror(errno));
+@@ -941,8 +951,16 @@ static int map_fd_by_name(char *name, int **fds)
+ 	return -1;
+ }
+ 
+-int map_parse_fds(int *argc, char ***argv, int **fds)
++int map_parse_fds(int *argc, char ***argv, int **fds, __u32 flags)
+ {
++	DECLARE_LIBBPF_OPTS(bpf_get_fd_opts, fd_opts,
++		.open_flags = flags,
++	);
++
++	DECLARE_LIBBPF_OPTS(bpf_obj_get_opts, obj_opts,
++		.file_flags = flags,
++	);
++
+ 	if (is_prefix(**argv, "id")) {
+ 		unsigned int id;
+ 		char *endptr;
+@@ -956,7 +974,7 @@ int map_parse_fds(int *argc, char ***argv, int **fds)
+ 		}
+ 		NEXT_ARGP();
+ 
+-		(*fds)[0] = bpf_map_get_fd_by_id(id);
++		(*fds)[0] = bpf_map_get_fd_by_id_opts(id, &fd_opts);
+ 		if ((*fds)[0] < 0) {
+ 			p_err("get map by id (%u): %s", id, strerror(errno));
+ 			return -1;
+@@ -974,7 +992,7 @@ int map_parse_fds(int *argc, char ***argv, int **fds)
+ 		}
+ 		NEXT_ARGP();
+ 
+-		return map_fd_by_name(name, fds);
++		return map_fd_by_name(name, fds, &fd_opts);
+ 	} else if (is_prefix(**argv, "pinned")) {
+ 		char *path;
+ 
+@@ -983,7 +1001,7 @@ int map_parse_fds(int *argc, char ***argv, int **fds)
+ 		path = **argv;
+ 		NEXT_ARGP();
+ 
+-		(*fds)[0] = open_obj_pinned_any(path, BPF_OBJ_MAP, NULL);
++		(*fds)[0] = open_obj_pinned_any(path, BPF_OBJ_MAP, &obj_opts);
+ 		if ((*fds)[0] < 0)
+ 			return -1;
+ 		return 1;
+@@ -1003,7 +1021,7 @@ int map_parse_fd(int *argc, char ***argv, __u32 flags)
+ 		p_err("mem alloc failed");
+ 		return -1;
+ 	}
+-	nb_fds = map_parse_fds(argc, argv, &fds);
++	nb_fds = map_parse_fds(argc, argv, &fds, flags);
+ 	if (nb_fds != 1) {
+ 		if (nb_fds > 1) {
+ 			p_err("several maps match this handle");
+diff --git a/tools/bpf/bpftool/main.h b/tools/bpf/bpftool/main.h
+index a1de2d29a4e7..9df08223a72e 100644
+--- a/tools/bpf/bpftool/main.h
++++ b/tools/bpf/bpftool/main.h
+@@ -169,9 +169,9 @@ int do_iter(int argc, char **argv) __weak;
+ 
+ int parse_u32_arg(int *argc, char ***argv, __u32 *val, const char *what);
+ int prog_parse_fd(int *argc, char ***argv, __u32 flags);
+-int prog_parse_fds(int *argc, char ***argv, int **fds);
++int prog_parse_fds(int *argc, char ***argv, int **fds, __u32 flags);
+ int map_parse_fd(int *argc, char ***argv, __u32 flags);
+-int map_parse_fds(int *argc, char ***argv, int **fds);
++int map_parse_fds(int *argc, char ***argv, int **fds, __u32 flags);
+ int map_parse_fd_and_info(int *argc, char ***argv, void *info, __u32 *info_len);
+ 
+ struct bpf_prog_linfo;
+diff --git a/tools/bpf/bpftool/map.c b/tools/bpf/bpftool/map.c
+index 79a517756a1c..86db951122f9 100644
+--- a/tools/bpf/bpftool/map.c
++++ b/tools/bpf/bpftool/map.c
+@@ -634,7 +634,7 @@ static int do_show_subset(int argc, char **argv)
+ 		p_err("mem alloc failed");
+ 		return -1;
+ 	}
+-	nb_fds = map_parse_fds(&argc, &argv, &fds);
++	nb_fds = map_parse_fds(&argc, &argv, &fds, 0);
+ 	if (nb_fds < 1)
+ 		goto exit_free;
+ 
+@@ -910,7 +910,7 @@ static int do_dump(int argc, char **argv)
+ 		p_err("mem alloc failed");
+ 		return -1;
+ 	}
+-	nb_fds = map_parse_fds(&argc, &argv, &fds);
++	nb_fds = map_parse_fds(&argc, &argv, &fds, 0);
+ 	if (nb_fds < 1)
+ 		goto exit_free;
+ 
+diff --git a/tools/bpf/bpftool/prog.c b/tools/bpf/bpftool/prog.c
+index 7e480031cd3d..1bb66a5f93a0 100644
+--- a/tools/bpf/bpftool/prog.c
++++ b/tools/bpf/bpftool/prog.c
+@@ -605,7 +605,7 @@ static int do_show_subset(int argc, char **argv)
+ 		p_err("mem alloc failed");
+ 		return -1;
+ 	}
+-	nb_fds = prog_parse_fds(&argc, &argv, &fds);
++	nb_fds = prog_parse_fds(&argc, &argv, &fds, 0);
+ 	if (nb_fds < 1)
+ 		goto exit_free;
+ 
+@@ -905,7 +905,7 @@ static int do_dump(int argc, char **argv)
+ 		p_err("mem alloc failed");
+ 		return -1;
+ 	}
+-	nb_fds = prog_parse_fds(&argc, &argv, &fds);
++	nb_fds = prog_parse_fds(&argc, &argv, &fds, 0);
+ 	if (nb_fds < 1)
+ 		goto exit_free;
+ 
+-- 
+2.25.1
+

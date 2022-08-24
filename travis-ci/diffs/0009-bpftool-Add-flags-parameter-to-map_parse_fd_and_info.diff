@@ -1,0 +1,144 @@
+From e5877d6a74ba9921cb817ebb5db3077f59c3d109 Mon Sep 17 00:00:00 2001
+From: Roberto Sassu <roberto.sassu@huawei.com>
+Date: Wed, 24 Aug 2022 11:46:48 +0200
+Subject: [PATCH v4 09/13] bpftool: Add flags parameter to
+ map_parse_fd_and_info()
+
+Add the flags parameter to map_parse_fd_and_info(), as this function is
+called directly by the functions implementing bpftool subcommands, so that
+it is possible to specify the right permissions for accessing a map.
+
+Still pass zero as argument, to request read-write permissions (current
+behavior) and adjust permissions in a later patch.
+
+Signed-off-by: Roberto Sassu <roberto.sassu@huawei.com>
+---
+ tools/bpf/bpftool/btf.c           |  2 +-
+ tools/bpf/bpftool/common.c        |  5 +++--
+ tools/bpf/bpftool/main.h          |  3 ++-
+ tools/bpf/bpftool/map.c           | 12 ++++++------
+ tools/bpf/bpftool/map_perf_ring.c |  3 ++-
+ 5 files changed, 14 insertions(+), 11 deletions(-)
+
+diff --git a/tools/bpf/bpftool/btf.c b/tools/bpf/bpftool/btf.c
+index b1ad1e2e9d3c..121e80e2870f 100644
+--- a/tools/bpf/bpftool/btf.c
++++ b/tools/bpf/bpftool/btf.c
+@@ -580,7 +580,7 @@ static int do_dump(int argc, char **argv)
+ 			return -1;
+ 		}
+ 
+-		fd = map_parse_fd_and_info(&argc, &argv, &info, &len);
++		fd = map_parse_fd_and_info(&argc, &argv, &info, &len, 0);
+ 		if (fd < 0)
+ 			return -1;
+ 
+diff --git a/tools/bpf/bpftool/common.c b/tools/bpf/bpftool/common.c
+index 77f7e337db2f..40f7dd73855c 100644
+--- a/tools/bpf/bpftool/common.c
++++ b/tools/bpf/bpftool/common.c
+@@ -1038,12 +1038,13 @@ int map_parse_fd(int *argc, char ***argv, __u32 flags)
+ 	return fd;
+ }
+ 
+-int map_parse_fd_and_info(int *argc, char ***argv, void *info, __u32 *info_len)
++int map_parse_fd_and_info(int *argc, char ***argv, void *info, __u32 *info_len,
++			  __u32 flags)
+ {
+ 	int err;
+ 	int fd;
+ 
+-	fd = map_parse_fd(argc, argv, 0);
++	fd = map_parse_fd(argc, argv, flags);
+ 	if (fd < 0)
+ 		return -1;
+ 
+diff --git a/tools/bpf/bpftool/main.h b/tools/bpf/bpftool/main.h
+index 9df08223a72e..2eb3447cd0cc 100644
+--- a/tools/bpf/bpftool/main.h
++++ b/tools/bpf/bpftool/main.h
+@@ -172,7 +172,8 @@ int prog_parse_fd(int *argc, char ***argv, __u32 flags);
+ int prog_parse_fds(int *argc, char ***argv, int **fds, __u32 flags);
+ int map_parse_fd(int *argc, char ***argv, __u32 flags);
+ int map_parse_fds(int *argc, char ***argv, int **fds, __u32 flags);
+-int map_parse_fd_and_info(int *argc, char ***argv, void *info, __u32 *info_len);
++int map_parse_fd_and_info(int *argc, char ***argv, void *info, __u32 *info_len,
++			  __u32 flags);
+ 
+ struct bpf_prog_linfo;
+ #ifdef HAVE_LIBBFD_SUPPORT
+diff --git a/tools/bpf/bpftool/map.c b/tools/bpf/bpftool/map.c
+index 86db951122f9..724c12ecbdd4 100644
+--- a/tools/bpf/bpftool/map.c
++++ b/tools/bpf/bpftool/map.c
+@@ -998,7 +998,7 @@ static int do_update(int argc, char **argv)
+ 	if (argc < 2)
+ 		usage();
+ 
+-	fd = map_parse_fd_and_info(&argc, &argv, &info, &len);
++	fd = map_parse_fd_and_info(&argc, &argv, &info, &len, 0);
+ 	if (fd < 0)
+ 		return -1;
+ 
+@@ -1077,7 +1077,7 @@ static int do_lookup(int argc, char **argv)
+ 	if (argc < 2)
+ 		usage();
+ 
+-	fd = map_parse_fd_and_info(&argc, &argv, &info, &len);
++	fd = map_parse_fd_and_info(&argc, &argv, &info, &len, 0);
+ 	if (fd < 0)
+ 		return -1;
+ 
+@@ -1128,7 +1128,7 @@ static int do_getnext(int argc, char **argv)
+ 	if (argc < 2)
+ 		usage();
+ 
+-	fd = map_parse_fd_and_info(&argc, &argv, &info, &len);
++	fd = map_parse_fd_and_info(&argc, &argv, &info, &len, 0);
+ 	if (fd < 0)
+ 		return -1;
+ 
+@@ -1199,7 +1199,7 @@ static int do_delete(int argc, char **argv)
+ 	if (argc < 2)
+ 		usage();
+ 
+-	fd = map_parse_fd_and_info(&argc, &argv, &info, &len);
++	fd = map_parse_fd_and_info(&argc, &argv, &info, &len, 0);
+ 	if (fd < 0)
+ 		return -1;
+ 
+@@ -1311,7 +1311,7 @@ static int do_create(int argc, char **argv)
+ 			if (!REQ_ARGS(2))
+ 				usage();
+ 			inner_map_fd = map_parse_fd_and_info(&argc, &argv,
+-							     &info, &len);
++							     &info, &len, 0);
+ 			if (inner_map_fd < 0)
+ 				return -1;
+ 			attr.inner_map_fd = inner_map_fd;
+@@ -1360,7 +1360,7 @@ static int do_pop_dequeue(int argc, char **argv)
+ 	if (argc < 2)
+ 		usage();
+ 
+-	fd = map_parse_fd_and_info(&argc, &argv, &info, &len);
++	fd = map_parse_fd_and_info(&argc, &argv, &info, &len, 0);
+ 	if (fd < 0)
+ 		return -1;
+ 
+diff --git a/tools/bpf/bpftool/map_perf_ring.c b/tools/bpf/bpftool/map_perf_ring.c
+index 6b0c410152de..dcfc4724cd8d 100644
+--- a/tools/bpf/bpftool/map_perf_ring.c
++++ b/tools/bpf/bpftool/map_perf_ring.c
+@@ -135,7 +135,8 @@ int do_event_pipe(int argc, char **argv)
+ 	int err, map_fd;
+ 
+ 	map_info_len = sizeof(map_info);
+-	map_fd = map_parse_fd_and_info(&argc, &argv, &map_info, &map_info_len);
++	map_fd = map_parse_fd_and_info(&argc, &argv, &map_info, &map_info_len,
++				       0);
+ 	if (map_fd < 0)
+ 		return -1;
+ 
+-- 
+2.25.1
+
