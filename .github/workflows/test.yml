@@ -80,7 +80,7 @@ jobs:
           arch: ${{ matrix.arch }}
           toolchain: ${{ matrix.toolchain }}
       - name: Build selftests
-        uses: libbpf/ci/build-selftests@master
+        uses: robertosassu/libbpf-ci/build-selftests@bpftool-static
         with:
           vmlinux_btf: ${{ github.workspace }}/vmlinux
           toolchain: ${{ matrix.toolchain }}
