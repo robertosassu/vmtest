@@ -92,7 +92,7 @@ jobs:
       - name: Tar artifacts
         run: |
           file_list=""
-          if [ "${{ github.repository }}" == "kernel-patches/vmtest" ]; then
+          if [ "${{ github.repository }}" == "robertosassu/vmtest" ]; then
             # Package up a bunch of additional infrastructure to support running
             # 'make kernelrelease' and bpf tool checks later on.
             file_list="$(find . -iname Makefile | xargs) \
