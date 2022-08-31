@@ -1,0 +1,157 @@
+From 98f9b3c21a084a4fec26e662a8d4005dba1a42d4 Mon Sep 17 00:00:00 2001
+From: Roberto Sassu <roberto.sassu@huawei.com>
+Date: Tue, 30 Aug 2022 10:45:17 +0200
+Subject: [PATCH v14 03/12] btf: Allow dynamic pointer parameters in kfuncs
+
+Allow dynamic pointers (struct bpf_dynptr_kern *) to be specified as
+parameters in kfuncs. Also, ensure that dynamic pointers passed as argument
+are valid and initialized, are a pointer to the stack, and of the type
+local. More dynamic pointer types can be supported in the future.
+
+To properly detect whether a parameter is of the desired type, introduce
+the stringify_struct() macro to compare the returned structure name with
+the desired name. In addition, protect against structure renames, by
+halting the build with BUILD_BUG_ON(), so that developers have to revisit
+the code.
+
+To check if a dynamic pointer passed to the kfunc is valid and initialized,
+and if its type is local, export the existing functions
+is_dynptr_reg_valid_init() and is_dynptr_type_expected().
+
+Cc: Joanne Koong <joannelkoong@gmail.com>
+Cc: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+Signed-off-by: Roberto Sassu <roberto.sassu@huawei.com>
+---
+ include/linux/bpf_verifier.h |  5 +++++
+ include/linux/btf.h          |  9 +++++++++
+ kernel/bpf/btf.c             | 33 +++++++++++++++++++++++++++++++++
+ kernel/bpf/verifier.c        | 10 +++++-----
+ 4 files changed, 52 insertions(+), 5 deletions(-)
+
+diff --git a/include/linux/bpf_verifier.h b/include/linux/bpf_verifier.h
+index 1fdddbf3546b..dd58dfccd025 100644
+--- a/include/linux/bpf_verifier.h
++++ b/include/linux/bpf_verifier.h
+@@ -571,6 +571,11 @@ int check_kfunc_mem_size_reg(struct bpf_verifier_env *env, struct bpf_reg_state
+ 			     u32 regno);
+ int check_mem_reg(struct bpf_verifier_env *env, struct bpf_reg_state *reg,
+ 		   u32 regno, u32 mem_size);
++bool is_dynptr_reg_valid_init(struct bpf_verifier_env *env,
++			      struct bpf_reg_state *reg);
++bool is_dynptr_type_expected(struct bpf_verifier_env *env,
++			     struct bpf_reg_state *reg,
++			     enum bpf_arg_type arg_type);
+ 
+ /* this lives here instead of in bpf.h because it needs to dereference tgt_prog */
+ static inline u64 bpf_trampoline_compute_key(const struct bpf_prog *tgt_prog,
+diff --git a/include/linux/btf.h b/include/linux/btf.h
+index ad93c2d9cc1c..f546d368ac5d 100644
+--- a/include/linux/btf.h
++++ b/include/linux/btf.h
+@@ -52,6 +52,15 @@
+ #define KF_SLEEPABLE    (1 << 5) /* kfunc may sleep */
+ #define KF_DESTRUCTIVE  (1 << 6) /* kfunc performs destructive actions */
+ 
++/*
++ * Return the name of the passed struct, if exists, or halt the build if for
++ * example the structure gets renamed. In this way, developers have to revisit
++ * the code using that structure name, and update it accordingly.
++ */
++#define stringify_struct(x)			\
++	({ BUILD_BUG_ON(sizeof(struct x) < 0);	\
++	   __stringify(x); })
++
+ struct btf;
+ struct btf_member;
+ struct btf_type;
+diff --git a/kernel/bpf/btf.c b/kernel/bpf/btf.c
+index e49b3b6d48ad..4266bff5fada 100644
+--- a/kernel/bpf/btf.c
++++ b/kernel/bpf/btf.c
+@@ -6362,15 +6362,20 @@ static int btf_check_func_arg_match(struct bpf_verifier_env *env,
+ 
+ 			if (is_kfunc) {
+ 				bool arg_mem_size = i + 1 < nargs && is_kfunc_arg_mem_size(btf, &args[i + 1], &regs[regno + 1]);
++				bool arg_dynptr = btf_type_is_struct(ref_t) &&
++						  !strcmp(ref_tname,
++							  stringify_struct(bpf_dynptr_kern));
+ 
+ 				/* Permit pointer to mem, but only when argument
+ 				 * type is pointer to scalar, or struct composed
+ 				 * (recursively) of scalars.
+ 				 * When arg_mem_size is true, the pointer can be
+ 				 * void *.
++				 * Also permit initialized local dynamic pointers.
+ 				 */
+ 				if (!btf_type_is_scalar(ref_t) &&
+ 				    !__btf_type_is_scalar_struct(log, btf, ref_t, 0) &&
++				    !arg_dynptr &&
+ 				    (arg_mem_size ? !btf_type_is_void(ref_t) : 1)) {
+ 					bpf_log(log,
+ 						"arg#%d pointer type %s %s must point to %sscalar, or struct with scalar\n",
+@@ -6378,6 +6383,34 @@ static int btf_check_func_arg_match(struct bpf_verifier_env *env,
+ 					return -EINVAL;
+ 				}
+ 
++				if (arg_dynptr) {
++					if (reg->type != PTR_TO_STACK) {
++						bpf_log(log, "arg#%d pointer type %s %s not to stack\n",
++							i, btf_type_str(ref_t),
++							ref_tname);
++						return -EINVAL;
++					}
++
++					if (!is_dynptr_reg_valid_init(env, reg)) {
++						bpf_log(log,
++							"arg#%d pointer type %s %s must be valid and initialized\n",
++							i, btf_type_str(ref_t),
++							ref_tname);
++						return -EINVAL;
++					}
++
++					if (!is_dynptr_type_expected(env, reg,
++							ARG_PTR_TO_DYNPTR | DYNPTR_TYPE_LOCAL)) {
++						bpf_log(log,
++							"arg#%d pointer type %s %s points to unsupported dynamic pointer type\n",
++							i, btf_type_str(ref_t),
++							ref_tname);
++						return -EINVAL;
++					}
++
++					continue;
++				}
++
+ 				/* Check for mem, len pair */
+ 				if (arg_mem_size) {
+ 					if (check_kfunc_mem_size_reg(env, &regs[regno + 1], regno + 1)) {
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index 1b913db252a3..c8a1b355b612 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -779,8 +779,8 @@ static bool is_dynptr_reg_valid_uninit(struct bpf_verifier_env *env, struct bpf_
+ 	return true;
+ }
+ 
+-static bool is_dynptr_reg_valid_init(struct bpf_verifier_env *env,
+-				     struct bpf_reg_state *reg)
++bool is_dynptr_reg_valid_init(struct bpf_verifier_env *env,
++			      struct bpf_reg_state *reg)
+ {
+ 	struct bpf_func_state *state = func(env, reg);
+ 	int spi = get_spi(reg->off);
+@@ -799,9 +799,9 @@ static bool is_dynptr_reg_valid_init(struct bpf_verifier_env *env,
+ 	return true;
+ }
+ 
+-static bool is_dynptr_type_expected(struct bpf_verifier_env *env,
+-				    struct bpf_reg_state *reg,
+-				    enum bpf_arg_type arg_type)
++bool is_dynptr_type_expected(struct bpf_verifier_env *env,
++			     struct bpf_reg_state *reg,
++			     enum bpf_arg_type arg_type)
+ {
+ 	struct bpf_func_state *state = func(env, reg);
+ 	int spi = get_spi(reg->off);
+-- 
+2.25.1
+
