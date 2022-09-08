@@ -1,0 +1,56 @@
+From 2fb771b688e693a6e9a43c6b4ca3fc139336846f Mon Sep 17 00:00:00 2001
+From: Roberto Sassu <roberto.sassu@huawei.com>
+Date: Thu, 23 Jun 2022 13:25:32 +0200
+Subject: [PATCH v17 05/12] KEYS: Move KEY_LOOKUP_ to include/linux/key.h and
+ define KEY_LOOKUP_ALL
+
+In preparation for the patch that introduces the bpf_lookup_user_key() eBPF
+kfunc, move KEY_LOOKUP_ definitions to include/linux/key.h, to be able to
+validate the kfunc parameters. Add them to enum key_lookup_flag, so that
+all the current ones and the ones defined in the future are automatically
+exported through BTF and available to eBPF programs.
+
+Also, add KEY_LOOKUP_ALL to the enum, with the logical OR of currently
+defined flags as value, to facilitate checking whether a variable contains
+only those flags.
+
+Signed-off-by: Roberto Sassu <roberto.sassu@huawei.com>
+Acked-by: Jarkko Sakkinen <jarkko@kernel.org>
+---
+ include/linux/key.h      | 6 ++++++
+ security/keys/internal.h | 2 --
+ 2 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/include/linux/key.h b/include/linux/key.h
+index 7febc4881363..d27477faf00d 100644
+--- a/include/linux/key.h
++++ b/include/linux/key.h
+@@ -88,6 +88,12 @@ enum key_need_perm {
+ 	KEY_DEFER_PERM_CHECK,	/* Special: permission check is deferred */
+ };
+ 
++enum key_lookup_flag {
++	KEY_LOOKUP_CREATE = 0x01,
++	KEY_LOOKUP_PARTIAL = 0x02,
++	KEY_LOOKUP_ALL = (KEY_LOOKUP_CREATE | KEY_LOOKUP_PARTIAL),
++};
++
+ struct seq_file;
+ struct user_struct;
+ struct signal_struct;
+diff --git a/security/keys/internal.h b/security/keys/internal.h
+index 9b9cf3b6fcbb..3c1e7122076b 100644
+--- a/security/keys/internal.h
++++ b/security/keys/internal.h
+@@ -165,8 +165,6 @@ extern struct key *request_key_and_link(struct key_type *type,
+ 
+ extern bool lookup_user_key_possessed(const struct key *key,
+ 				      const struct key_match_data *match_data);
+-#define KEY_LOOKUP_CREATE	0x01
+-#define KEY_LOOKUP_PARTIAL	0x02
+ 
+ extern long join_session_keyring(const char *name);
+ extern void key_change_session_keyring(struct callback_head *twork);
+-- 
+2.25.1
+

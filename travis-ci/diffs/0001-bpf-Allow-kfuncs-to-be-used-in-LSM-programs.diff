@@ -1,0 +1,31 @@
+From 767e39ef3ac187b985fc30600e12c7eab1da37c4 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@kernel.org>
+Date: Tue, 28 Jun 2022 16:19:46 +0000
+Subject: [PATCH v17 01/12] bpf: Allow kfuncs to be used in LSM programs
+
+In preparation for the addition of new kfuncs, allow kfuncs defined in the
+tracing subsystem to be used in LSM programs by mapping the LSM program
+type to the TRACING hook.
+
+Signed-off-by: KP Singh <kpsingh@kernel.org>
+Signed-off-by: Roberto Sassu <roberto.sassu@huawei.com>
+Acked-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ kernel/bpf/btf.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/kernel/bpf/btf.c b/kernel/bpf/btf.c
+index 9d12212fcd61..b5a0b9b8c272 100644
+--- a/kernel/bpf/btf.c
++++ b/kernel/bpf/btf.c
+@@ -7381,6 +7381,7 @@ static int bpf_prog_type_to_kfunc_hook(enum bpf_prog_type prog_type)
+ 	case BPF_PROG_TYPE_STRUCT_OPS:
+ 		return BTF_KFUNC_HOOK_STRUCT_OPS;
+ 	case BPF_PROG_TYPE_TRACING:
++	case BPF_PROG_TYPE_LSM:
+ 		return BTF_KFUNC_HOOK_TRACING;
+ 	case BPF_PROG_TYPE_SYSCALL:
+ 		return BTF_KFUNC_HOOK_SYSCALL;
+-- 
+2.25.1
+
