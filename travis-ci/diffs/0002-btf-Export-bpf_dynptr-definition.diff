@@ -1,0 +1,55 @@
+From b815e0c6fd70033cced691ea70845b28de0911da Mon Sep 17 00:00:00 2001
+From: Roberto Sassu <roberto.sassu@huawei.com>
+Date: Mon, 19 Sep 2022 15:13:31 +0200
+Subject: [PATCH v18 02/13] btf: Export bpf_dynptr definition
+
+eBPF dynamic pointers is a new feature recently added to upstream. It binds
+together a pointer to a memory area and its size. The internal kernel
+structure bpf_dynptr_kern is not accessible by eBPF programs in user space.
+They instead see bpf_dynptr, which is then translated to the internal
+kernel structure by the eBPF verifier.
+
+The problem is that it is not possible to include at the same time the uapi
+include linux/bpf.h and the vmlinux BTF vmlinux.h, as they both contain the
+definition of some structures/enums. The compiler complains saying that the
+structures/enums are redefined.
+
+As bpf_dynptr is defined in the uapi include linux/bpf.h, this makes it
+impossible to include vmlinux.h. However, in some cases, e.g. when using
+kfuncs, vmlinux.h has to be included. The only option until now was to
+include vmlinux.h and add the definition of bpf_dynptr directly in the eBPF
+program source code from linux/bpf.h.
+
+Solve the problem by using the same approach as for bpf_timer (which also
+follows the same scheme with the _kern suffix for the internal kernel
+structure).
+
+Add the following line in one of the dynamic pointers helper,
+bpf_dynptr_from_mem():
+
+BTF_TYPE_EMIT(struct bpf_dynptr);
+
+Cc: stable@vger.kernel.org
+Cc: Joanne Koong <joannelkoong@gmail.com>
+Fixes: 97e03f521050c ("bpf: Add verifier support for dynptrs")
+Signed-off-by: Roberto Sassu <roberto.sassu@huawei.com>
+---
+ kernel/bpf/helpers.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/kernel/bpf/helpers.c b/kernel/bpf/helpers.c
+index 41aeaf3862ec..7ce1f583b929 100644
+--- a/kernel/bpf/helpers.c
++++ b/kernel/bpf/helpers.c
+@@ -1446,6 +1446,8 @@ BPF_CALL_4(bpf_dynptr_from_mem, void *, data, u32, size, u64, flags, struct bpf_
+ {
+ 	int err;
+ 
++	BTF_TYPE_EMIT(struct bpf_dynptr);
++
+ 	err = bpf_dynptr_check_size(size);
+ 	if (err)
+ 		goto error;
+-- 
+2.25.1
+
