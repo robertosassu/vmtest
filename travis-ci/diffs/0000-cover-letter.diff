@@ -1,0 +1,51 @@
+From ada3658b051b690acdd838b42e965917ab1e7489 Mon Sep 17 00:00:00 2001
+From: Roberto Sassu <roberto.sassu@huawei.com>
+Date: Mon, 26 Sep 2022 16:19:09 +0200
+Subject: [RFC][PATCH 0/3] bpf: Enforce map fd modes in verifier
+
+===
+All credits of this patch set go to Lorenz Bauer <oss@lmb.io>, as he
+identified this issue and proposed a number of solutions.
+===
+
+Lorenz presented at the Linux Plumbers EU 2022 a talk with title 'Closing
+the BPF map permission loophole', where he reported that read-only fds can
+be used for map update operations, if they were provided to eBPF programs.
+
+This work initially started as PoC to reproduce the reported bug, and
+became the test for validating an idea on how to fix the bug.
+
+Patch 1 adds a dependency necessary for the tests.
+
+The actual fix, in patch 2, is relatively simple. It is based on an already
+existing enforcement mechanism in the eBPF verifier for map flags. As
+Lorenz mentioned, a problem would be backporting this fix to stable kernels
+which don't have that enforcement mechanism. However, backporting just the
+enforcement mechanism itself (without introducing the new map flags and
+allowing user space to use them) could meet the stable kernel criteria.
+
+Alternatively, a completely different fix can be developed for older stable
+kernels, like what Lorenz suggested, to refuse fd which are not read/write.
+
+Finally, patch 3 introduces the tests.
+
+Roberto Sassu (3):
+  libbpf: Define bpf_get_fd_opts and introduce
+    bpf_map_get_fd_by_id_opts()
+  bpf: Enforce granted permissions in a map fd at verifier level
+  selftests/bpf: Test enforcement of map fd permissions at verifier
+    level
+
+ include/linux/bpf.h                           |  13 +
+ include/linux/bpf_verifier.h                  |   1 +
+ kernel/bpf/verifier.c                         |  26 +-
+ tools/lib/bpf/bpf.c                           |  12 +-
+ tools/lib/bpf/bpf.h                           |  10 +
+ tools/lib/bpf/libbpf.map                      |   3 +-
+ .../selftests/bpf/prog_tests/map_fd_perm.c    | 228 ++++++++++++++++++
+ 7 files changed, 289 insertions(+), 4 deletions(-)
+ create mode 100644 tools/testing/selftests/bpf/prog_tests/map_fd_perm.c
+
+-- 
+2.25.1
+
