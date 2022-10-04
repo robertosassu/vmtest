@@ -1,0 +1,31 @@
+From 5f7c9f0b94fd49b5829faae1299ef783fe8f4a20 Mon Sep 17 00:00:00 2001
+From: Roberto Sassu <roberto.sassu@huawei.com>
+Date: Tue, 4 Oct 2022 10:14:31 +0200
+Subject: [PATCH 1/6] libbpf: Fix LIBBPF_1.0.0 declaration in libbpf.map
+
+Add the missing LIBBPF_0.8.0 at the end of the LIBBPF_1.0.0 declaration,
+similarly to other version declarations.
+
+Cc: stable@vger.kernel.org # 5.19.x
+Fixes: e2371b1632b1c ("libbpf: start 1.0 development cycle")
+Signed-off-by: Roberto Sassu <roberto.sassu@huawei.com>
+---
+ tools/lib/bpf/libbpf.map | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tools/lib/bpf/libbpf.map b/tools/lib/bpf/libbpf.map
+index c1d6aa7c82b6..04fab9f1fdd7 100644
+--- a/tools/lib/bpf/libbpf.map
++++ b/tools/lib/bpf/libbpf.map
+@@ -367,7 +367,7 @@ LIBBPF_1.0.0 {
+ 		libbpf_bpf_map_type_str;
+ 		libbpf_bpf_prog_type_str;
+ 		perf_buffer__buffer;
+-};
++} LIBBPF_0.8.0;
+ 
+ LIBBPF_1.1.0 {
+ 	global:
+-- 
+2.25.1
+
