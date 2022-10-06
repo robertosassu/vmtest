@@ -1,0 +1,98 @@
+From 7d28697c4db89f412f25e53a88e3e39208a642f7 Mon Sep 17 00:00:00 2001
+From: Roberto Sassu <roberto.sassu@huawei.com>
+Date: Wed, 24 Aug 2022 16:18:13 +0200
+Subject: [PATCH v2 2/6] libbpf: Introduce bpf_get_fd_by_id_opts and
+ bpf_map_get_fd_by_id_opts()
+
+Define a new data structure called bpf_get_fd_by_id_opts, with the member
+open_flags, to be used by callers of the _opts variants of
+bpf_*_get_fd_by_id() to specify the permissions needed for the file
+descriptor to be obtained.
+
+Also, introduce bpf_map_get_fd_by_id_opts(), to let the caller pass a
+bpf_get_fd_by_id_opts structure.
+
+Finally, keep the existing bpf_map_get_fd_by_id(), and call
+bpf_map_get_fd_by_id_opts() with NULL as opts argument, to request
+read-write permissions (current behavior).
+
+Signed-off-by: Roberto Sassu <roberto.sassu@huawei.com>
+---
+ tools/lib/bpf/bpf.c      | 12 +++++++++++-
+ tools/lib/bpf/bpf.h      | 10 ++++++++++
+ tools/lib/bpf/libbpf.map |  1 +
+ 3 files changed, 22 insertions(+), 1 deletion(-)
+
+diff --git a/tools/lib/bpf/bpf.c b/tools/lib/bpf/bpf.c
+index 1d49a0352836..c08d7509553d 100644
+--- a/tools/lib/bpf/bpf.c
++++ b/tools/lib/bpf/bpf.c
+@@ -948,19 +948,29 @@ int bpf_prog_get_fd_by_id(__u32 id)
+ 	return libbpf_err_errno(fd);
+ }
+ 
+-int bpf_map_get_fd_by_id(__u32 id)
++int bpf_map_get_fd_by_id_opts(__u32 id,
++			      const struct bpf_get_fd_by_id_opts *opts)
+ {
+ 	const size_t attr_sz = offsetofend(union bpf_attr, open_flags);
+ 	union bpf_attr attr;
+ 	int fd;
+ 
++	if (!OPTS_VALID(opts, bpf_get_fd_by_id_opts))
++		return libbpf_err(-EINVAL);
++
+ 	memset(&attr, 0, attr_sz);
+ 	attr.map_id = id;
++	attr.open_flags = OPTS_GET(opts, open_flags, 0);
+ 
+ 	fd = sys_bpf_fd(BPF_MAP_GET_FD_BY_ID, &attr, attr_sz);
+ 	return libbpf_err_errno(fd);
+ }
+ 
++int bpf_map_get_fd_by_id(__u32 id)
++{
++	return bpf_map_get_fd_by_id_opts(id, NULL);
++}
++
+ int bpf_btf_get_fd_by_id(__u32 id)
+ {
+ 	const size_t attr_sz = offsetofend(union bpf_attr, open_flags);
+diff --git a/tools/lib/bpf/bpf.h b/tools/lib/bpf/bpf.h
+index 9c50beabdd14..10ce38f0a9ef 100644
+--- a/tools/lib/bpf/bpf.h
++++ b/tools/lib/bpf/bpf.h
+@@ -365,8 +365,18 @@ LIBBPF_API int bpf_prog_get_next_id(__u32 start_id, __u32 *next_id);
+ LIBBPF_API int bpf_map_get_next_id(__u32 start_id, __u32 *next_id);
+ LIBBPF_API int bpf_btf_get_next_id(__u32 start_id, __u32 *next_id);
+ LIBBPF_API int bpf_link_get_next_id(__u32 start_id, __u32 *next_id);
++
++struct bpf_get_fd_by_id_opts {
++	size_t sz; /* size of this struct for forward/backward compatibility */
++	__u32 open_flags; /* permissions requested for the operation on fd */
++	size_t :0;
++};
++#define bpf_get_fd_by_id_opts__last_field open_flags
++
+ LIBBPF_API int bpf_prog_get_fd_by_id(__u32 id);
+ LIBBPF_API int bpf_map_get_fd_by_id(__u32 id);
++LIBBPF_API int bpf_map_get_fd_by_id_opts(__u32 id,
++				const struct bpf_get_fd_by_id_opts *opts);
+ LIBBPF_API int bpf_btf_get_fd_by_id(__u32 id);
+ LIBBPF_API int bpf_link_get_fd_by_id(__u32 id);
+ LIBBPF_API int bpf_obj_get_info_by_fd(int bpf_fd, void *info, __u32 *info_len);
+diff --git a/tools/lib/bpf/libbpf.map b/tools/lib/bpf/libbpf.map
+index 04fab9f1fdd7..2e665b21d84f 100644
+--- a/tools/lib/bpf/libbpf.map
++++ b/tools/lib/bpf/libbpf.map
+@@ -371,6 +371,7 @@ LIBBPF_1.0.0 {
+ 
+ LIBBPF_1.1.0 {
+ 	global:
++		bpf_map_get_fd_by_id_opts;
+ 		user_ring_buffer__discard;
+ 		user_ring_buffer__free;
+ 		user_ring_buffer__new;
+-- 
+2.25.1
+
