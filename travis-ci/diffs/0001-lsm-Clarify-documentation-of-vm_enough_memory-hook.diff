@@ -1,0 +1,34 @@
+From 2a6c4709c65bdcb5c6a62ec4919e7b05e9a6b628 Mon Sep 17 00:00:00 2001
+From: Roberto Sassu <roberto.sassu@huawei.com>
+Date: Fri, 28 Oct 2022 10:28:48 +0200
+Subject: [RFC][PATCH 1/3] lsm: Clarify documentation of vm_enough_memory hook
+
+include/linux/lsm_hooks.h reports the result of the LSM infrastructure to
+the callers, not what LSMs should return to the LSM infrastructure.
+
+Clarify that and add that returning 1 from the LSMs means calling
+__vm_enough_memory() with cap_sys_admin set, 0 without.
+
+Signed-off-by: Roberto Sassu <roberto.sassu@huawei.com>
+---
+ include/linux/lsm_hooks.h | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/include/linux/lsm_hooks.h b/include/linux/lsm_hooks.h
+index 4ec80b96c22e..f40b82ca91e7 100644
+--- a/include/linux/lsm_hooks.h
++++ b/include/linux/lsm_hooks.h
+@@ -1411,7 +1411,9 @@
+  *	Check permissions for allocating a new virtual mapping.
+  *	@mm contains the mm struct it is being added to.
+  *	@pages contains the number of pages.
+- *	Return 0 if permission is granted.
++ *	Return 0 if permission is granted by LSMs to the caller. LSMs should
++ *	return 1 if __vm_enough_memory() should be called with
++ *	cap_sys_admin set, 0 if not.
+  *
+  * @ismaclabel:
+  *	Check if the extended attribute specified by @name
+-- 
+2.25.1
+

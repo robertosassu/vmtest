@@ -1,0 +1,172 @@
+From 21afa4b00211c16cfa897435c99cbfc2f218c74f Mon Sep 17 00:00:00 2001
+From: Roberto Sassu <roberto.sassu@huawei.com>
+Date: Wed, 26 Oct 2022 18:57:35 +0200
+Subject: [RFC][PATCH 3/3] selftests/bpf: Check if return values of LSM
+ programs are allowed
+
+Ensure that the eBPF verifier allows to load only eBPF programs that
+return an allowed return value depending on the LSM hook they attach to.
+
+Signed-off-by: Roberto Sassu <roberto.sassu@huawei.com>
+---
+ .../testing/selftests/bpf/verifier/lsm_ret.c  | 148 ++++++++++++++++++
+ 1 file changed, 148 insertions(+)
+ create mode 100644 tools/testing/selftests/bpf/verifier/lsm_ret.c
+
+diff --git a/tools/testing/selftests/bpf/verifier/lsm_ret.c b/tools/testing/selftests/bpf/verifier/lsm_ret.c
+new file mode 100644
+index 000000000000..1a11f47fb24a
+--- /dev/null
++++ b/tools/testing/selftests/bpf/verifier/lsm_ret.c
+@@ -0,0 +1,148 @@
++{
++	"lsm return value: positive not allowed, return -EPERM",
++	.insns = {
++	BPF_MOV64_IMM(BPF_REG_0, -EPERM),
++	BPF_EXIT_INSN(),
++	},
++	.prog_type = BPF_PROG_TYPE_LSM,
++	.kfunc = "inode_permission",
++	.expected_attach_type = BPF_LSM_MAC,
++	.result = ACCEPT,
++},
++{
++	"lsm return value: positive not allowed, return zero",
++	.insns = {
++	BPF_MOV64_IMM(BPF_REG_0, 0),
++	BPF_EXIT_INSN(),
++	},
++	.prog_type = BPF_PROG_TYPE_LSM,
++	.kfunc = "inode_permission",
++	.expected_attach_type = BPF_LSM_MAC,
++	.result = ACCEPT,
++},
++{
++	"lsm return value: positive not allowed, return one",
++	.insns = {
++	BPF_MOV64_IMM(BPF_REG_0, 1),
++	BPF_EXIT_INSN(),
++	},
++	.prog_type = BPF_PROG_TYPE_LSM,
++	.kfunc = "inode_permission",
++	.expected_attach_type = BPF_LSM_MAC,
++	.errstr = "Invalid R0, cannot return positive value",
++	.result = REJECT,
++},
++{
++	"lsm return value: zero/positive not allowed, return -EPERM",
++	.insns = {
++	BPF_MOV64_IMM(BPF_REG_0, -EPERM),
++	BPF_EXIT_INSN(),
++	},
++	.prog_type = BPF_PROG_TYPE_LSM,
++	.kfunc = "inode_init_security",
++	.expected_attach_type = BPF_LSM_MAC,
++	.result = ACCEPT,
++},
++{
++	"lsm return value: zero/positive not allowed, return zero",
++	.insns = {
++	BPF_MOV64_IMM(BPF_REG_0, 0),
++	BPF_EXIT_INSN(),
++	},
++	.prog_type = BPF_PROG_TYPE_LSM,
++	.kfunc = "inode_init_security",
++	.expected_attach_type = BPF_LSM_MAC,
++	.errstr = "Invalid R0, cannot return zero value",
++	.result = REJECT,
++},
++{
++	"lsm return value: zero/positive not allowed, return one",
++	.insns = {
++	BPF_MOV64_IMM(BPF_REG_0, 1),
++	BPF_EXIT_INSN(),
++	},
++	.prog_type = BPF_PROG_TYPE_LSM,
++	.kfunc = "inode_init_security",
++	.expected_attach_type = BPF_LSM_MAC,
++	.errstr = "Invalid R0, cannot return positive value",
++	.result = REJECT,
++},
++{
++	"lsm return value: positive allowed, return one",
++	.insns = {
++	BPF_MOV64_IMM(BPF_REG_0, 1),
++	BPF_EXIT_INSN(),
++	},
++	.prog_type = BPF_PROG_TYPE_LSM,
++	.kfunc = "getprocattr",
++	.expected_attach_type = BPF_LSM_MAC,
++	.result = ACCEPT,
++},
++{
++	"lsm return value: positive allowed, return two",
++	.insns = {
++	BPF_MOV64_IMM(BPF_REG_0, 2),
++	BPF_EXIT_INSN(),
++	},
++	.prog_type = BPF_PROG_TYPE_LSM,
++	.kfunc = "getprocattr",
++	.expected_attach_type = BPF_LSM_MAC,
++	.result = ACCEPT,
++},
++{
++	"lsm return value: only one allowed, return one",
++	.insns = {
++	BPF_MOV64_IMM(BPF_REG_0, 1),
++	BPF_EXIT_INSN(),
++	},
++	.prog_type = BPF_PROG_TYPE_LSM,
++	.kfunc = "audit_rule_match",
++	.expected_attach_type = BPF_LSM_MAC,
++	.result = ACCEPT,
++},
++{
++	"lsm return value: only one allowed, return two",
++	.insns = {
++	BPF_MOV64_IMM(BPF_REG_0, 2),
++	BPF_EXIT_INSN(),
++	},
++	.prog_type = BPF_PROG_TYPE_LSM,
++	.kfunc = "audit_rule_match",
++	.expected_attach_type = BPF_LSM_MAC,
++	.errstr = "Invalid R0, can return only one as positive value",
++	.result = REJECT,
++},
++{
++	"lsm return value: negative not allowed, return -EPERM",
++	.insns = {
++	BPF_MOV64_IMM(BPF_REG_0, -EPERM),
++	BPF_EXIT_INSN(),
++	},
++	.prog_type = BPF_PROG_TYPE_LSM,
++	.kfunc = "vm_enough_memory",
++	.expected_attach_type = BPF_LSM_MAC,
++	.errstr = "Invalid R0, cannot return negative value",
++	.result = REJECT,
++},
++{
++	"lsm return value: negative not allowed, return zero",
++	.insns = {
++	BPF_MOV64_IMM(BPF_REG_0, 0),
++	BPF_EXIT_INSN(),
++	},
++	.prog_type = BPF_PROG_TYPE_LSM,
++	.kfunc = "vm_enough_memory",
++	.expected_attach_type = BPF_LSM_MAC,
++	.result = ACCEPT,
++},
++{
++	"lsm return value: negative not allowed, return one",
++	.insns = {
++	BPF_MOV64_IMM(BPF_REG_0, 1),
++	BPF_EXIT_INSN(),
++	},
++	.prog_type = BPF_PROG_TYPE_LSM,
++	.kfunc = "vm_enough_memory",
++	.expected_attach_type = BPF_LSM_MAC,
++	.result = ACCEPT,
++},
+-- 
+2.25.1
+
