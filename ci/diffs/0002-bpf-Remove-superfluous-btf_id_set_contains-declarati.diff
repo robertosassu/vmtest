@@ -1,0 +1,32 @@
+From cf0c4ec18c1a434cedbc9c32f6f0d2aa54b68d02 Mon Sep 17 00:00:00 2001
+From: Roberto Sassu <roberto.sassu@huawei.com>
+Date: Mon, 28 Nov 2022 16:13:00 +0100
+Subject: [RFC][PATCH v2 2/8] bpf: Remove superfluous btf_id_set_contains()
+ declaration
+
+Commit 8ffa5cc142137 ("bpf: Recognize lock and list fields in allocated
+objects") moved btf_id_set_contains() and btf_id8_set_contains()
+implementations from kernel/bpf/verifier.c to include/linux/btf.h.
+
+Thus, remove the declaration in include/linux/bpf.h.
+
+Signed-off-by: Roberto Sassu <roberto.sassu@huawei.com>
+---
+ include/linux/bpf.h | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/include/linux/bpf.h b/include/linux/bpf.h
+index 4920ac252754..681614f1fa8c 100644
+--- a/include/linux/bpf.h
++++ b/include/linux/bpf.h
+@@ -2792,7 +2792,6 @@ void *bpf_arch_text_copy(void *dst, void *src, size_t len);
+ int bpf_arch_text_invalidate(void *dst, size_t len);
+ 
+ struct btf_id_set;
+-bool btf_id_set_contains(const struct btf_id_set *set, u32 id);
+ 
+ #define MAX_BPRINTF_VARARGS		12
+ 
+-- 
+2.25.1
+

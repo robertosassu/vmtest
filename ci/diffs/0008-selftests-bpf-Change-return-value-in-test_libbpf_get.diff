@@ -1,0 +1,46 @@
+From f2172178d8ce2efff88c1c0bfbc9cf9d15f978aa Mon Sep 17 00:00:00 2001
+From: Roberto Sassu <roberto.sassu@huawei.com>
+Date: Tue, 6 Dec 2022 16:47:24 +0100
+Subject: [RFC][PATCH v2 8/8] selftests/bpf: Change return value in
+ test_libbpf_get_fd_by_id_opts.c
+
+In the no_alu32 version, the eBPF assembly looks like:
+
+       0:	b7 00 00 00 00 00 00 00	r0 = 0
+       1:	79 12 00 00 00 00 00 00	r2 = *(u64 *)(r1 + 0)
+       2:	18 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00	r3 = 0 ll
+       4:	5d 32 04 00 00 00 00 00	if r2 != r3 goto +4 <LBB0_2>
+       5:	79 10 08 00 00 00 00 00	r0 = *(u64 *)(r1 + 8)
+       6:	67 00 00 00 3e 00 00 00	r0 <<= 62
+       7:	c7 00 00 00 3f 00 00 00	r0 s>>= 63
+       8:	57 00 00 00 f3 ff ff ff	r0 &= -13
+
+Unfortunately, ANDing of negative numbers is not yet supported in the
+verifier. As a consequence, current bounds are lost in the AND operation,
+resulting in estimating a positive return value, even if there isn't.
+
+For now, return -EPERM instead of -EACCES, to remove the AND operation and
+let the verifier know that the return value is legitimate (negative or
+zero).
+
+Signed-off-by: Roberto Sassu <roberto.sassu@huawei.com>
+---
+ .../testing/selftests/bpf/progs/test_libbpf_get_fd_by_id_opts.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tools/testing/selftests/bpf/progs/test_libbpf_get_fd_by_id_opts.c b/tools/testing/selftests/bpf/progs/test_libbpf_get_fd_by_id_opts.c
+index f5ac5f3e8919..f4f141cc91d3 100644
+--- a/tools/testing/selftests/bpf/progs/test_libbpf_get_fd_by_id_opts.c
++++ b/tools/testing/selftests/bpf/progs/test_libbpf_get_fd_by_id_opts.c
+@@ -30,7 +30,7 @@ int BPF_PROG(check_access, struct bpf_map *map, fmode_t fmode)
+ 		return 0;
+ 
+ 	if (fmode & FMODE_WRITE)
+-		return -EACCES;
++		return -EPERM;
+ 
+ 	return 0;
+ }
+-- 
+2.25.1
+

@@ -1,0 +1,44 @@
+From f2172178d8ce2efff88c1c0bfbc9cf9d15f978aa Mon Sep 17 00:00:00 2001
+From: Roberto Sassu <roberto.sassu@huawei.com>
+Date: Wed, 7 Dec 2022 16:22:55 +0100
+Subject: [RFC][PATCH v2 0/8] *** SUBJECT HERE ***
+
+*** BLURB HERE ***
+
+Paul Moore (1):
+  lsm: make security_socket_getpeersec_stream() sockptr_t safe
+
+Roberto Sassu (7):
+  bpf: Remove superfluous btf_id_set_contains() declaration
+  bpf: Mark ALU32 operations in bpf_reg_state structure
+  lsm: Redefine LSM_HOOK() macro to add return value flags as argument
+  bpf-lsm: Enforce return value limitations on security modules
+  selftests/bpf: Check if return values of LSM programs are allowed
+  selftests/bpf: Prevent positive ret values in test_lsm and
+    verify_pkcs7_sig
+  selftests/bpf: Change return value in test_libbpf_get_fd_by_id_opts.c
+
+ include/linux/bpf.h                           |   1 -
+ include/linux/bpf_lsm.h                       |  11 +-
+ include/linux/bpf_verifier.h                  |   1 +
+ include/linux/lsm_hook_defs.h                 | 780 ++++++++++--------
+ include/linux/lsm_hooks.h                     |  13 +-
+ include/linux/security.h                      |  11 +-
+ kernel/bpf/bpf_lsm.c                          |  65 +-
+ kernel/bpf/verifier.c                         |  17 +-
+ net/core/sock.c                               |   3 +-
+ security/apparmor/lsm.c                       |  29 +-
+ security/bpf/hooks.c                          |   2 +-
+ security/security.c                           |  10 +-
+ security/selinux/hooks.c                      |  13 +-
+ security/smack/smack_lsm.c                    |  19 +-
+ tools/testing/selftests/bpf/progs/lsm.c       |   4 +
+ .../bpf/progs/test_libbpf_get_fd_by_id_opts.c |   2 +-
+ .../bpf/progs/test_verify_pkcs7_sig.c         |  11 +-
+ .../testing/selftests/bpf/verifier/lsm_ret.c  | 148 ++++
+ 18 files changed, 751 insertions(+), 389 deletions(-)
+ create mode 100644 tools/testing/selftests/bpf/verifier/lsm_ret.c
+
+-- 
+2.25.1
+
