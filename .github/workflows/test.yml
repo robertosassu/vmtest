@@ -9,7 +9,7 @@ concurrency:
 
 jobs:
   llvm-toolchain:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     outputs:
       llvm: ${{ steps.llvm-toolchain-impl.outputs.version }}
     steps:
@@ -20,7 +20,7 @@ jobs:
         run: echo "version=llvm-${{ steps.llvm-version.outputs.version }}" >> $GITHUB_OUTPUT
   set-matrix:
     needs: llvm-toolchain
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     outputs:
       build-matrix: ${{ steps.set-matrix-impl.outputs.build_matrix }}
       test-matrix: ${{ steps.set-matrix-impl.outputs.test_matrix }}
@@ -78,12 +78,12 @@ jobs:
 
           # Only a few repository within "kernel-patches" use self-hosted runners.
           if "${{ github.repository_owner }}" != "kernel-patches" or "${{ github.repository }}" not in self_hosted_repos:
-            # Outside of those repositories, we only run on x86_64 GH hosted runners (ubuntu-latest)
+            # Outside of those repositories, we only run on x86_64 GH hosted runners (ubuntu-20.04)
             for idx in range(len(matrix) - 1, -1, -1):
               if matrix[idx]["arch"] != Arch.x86_64.value:
                 del matrix[idx]
               else:
-                matrix[idx]["runs_on"] = ["ubuntu-latest"]
+                matrix[idx]["runs_on"] = ["ubuntu-20.04"]
           else:
             # Otherwise, run on (self-hosted, arch) runners
             for idx in range(len(matrix) - 1, -1, -1):
